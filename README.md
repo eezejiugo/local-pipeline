@@ -24,7 +24,7 @@ To ensure everything works smoothly while using the script, we need to add some 
 Example:
 ```yaml
 image:
-  repository: europe-west3-docker.pkg.dev/development-240711/docker-repository
+  repository: europe-west3-docker.pkg.dev/development-xxx11/docker-repository
   name: uapi
   tag: release-bulk-payment-SNAPSHOT
   pullPolicy: Always
