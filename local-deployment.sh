@@ -33,9 +33,9 @@ print_title() {
 # Step 1: Service Type Selection
 print_step "1" "Service Type Selection"
 print_title "Select service type:"
-printf "%s\n" "${GREEN}- [1] Library${NC}"
+printf "%s\n" "${GREEN}- [1] Maven Library${NC}"
 printf "%s\n" "${YELLOW}- [2] Egress${NC}"
-printf "%s\n" "${RED}- [3] Other Services${NC}"
+printf "%s\n" "${RED}- [3] Other Java Services${NC}"
 
 while true; do
     read -p "Enter option [1-3]: " choice
@@ -60,7 +60,7 @@ while true; do
     esac
 done
 
-PATH_TO_HELM_PROJECT="/Path/to/helm-repository/stable/$SERVICE_TYPE"
+PATH_TO_HELM_PROJECT="/Users/eezejiugo/Documents/NeonomicsCode/helm-repository/stable/$SERVICE_TYPE"
 print_separator
 
 # For Library, we need WRK_PROJECT_PATH first before other steps
