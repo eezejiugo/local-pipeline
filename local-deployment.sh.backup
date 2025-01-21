@@ -109,11 +109,10 @@ print_step "[1]" "Service Type Selection"
 print_title "Select service type:"
 printf "%s\n" "${GREEN}- [1] Maven Library${NC}"
 printf "%s\n" "${YELLOW}- [2] Egress${NC}"
-printf "%s\n" "${BLUE}- [3] Connectors${NC}"
-printf "%s\n" "${RED}- [4] Other Java Services${NC}"
+printf "%s\n" "${RED}- [3] Other Java Services${NC}"
 
 while true; do
-    read -p "Enter option [1-4]: " choice
+    read -p "Enter option [1-3]: " choice
     case $choice in
         1 ) 
             SERVICE_TYPE="maven-repository"
@@ -126,11 +125,6 @@ while true; do
             IS_LIBRARY=false
             break;;
         3 ) 
-            SERVICE_TYPE="connector-application"
-            print_success "Connector service selected"
-            IS_LIBRARY=false
-            break;;
-        4 ) 
             SERVICE_TYPE="neonomics-application"
             print_success "Other services selected"
             IS_LIBRARY=false
@@ -141,9 +135,17 @@ while true; do
 done
 
 # Environment variables with defaults
-DOCKER_HELM="oci://europe-west3-docker.pkg.dev/integration-240711/helm-repository"
-PATH_TO_HELM_PROJECT="$DOCKER_HELM/$SERVICE_TYPE"
+REPOSITORY_PATH=${HELM_REPOSITORY_PATH:-"$HOME/Path/to/helm-repository/stable"}
+PATH_TO_HELM_PROJECT="$REPOSITORY_PATH/$SERVICE_TYPE"
 print_separator
+
+if [ ! -d "$PATH_TO_HELM_PROJECT" ]; then
+    print_error "Helm project directory not found: $PATH_TO_HELM_PROJECT"
+    print_error "Please set HELM_REPOSITORY_PATH environment variable correctly"
+    print_error "Add this [export HELM_REPOSITORY_PATH="/path/to/helm/repository"] to your .zshrc file"
+    print_error "If you have added it to your .zshrc file, please run 'source ~/.zshrc' & restart your terminal"
+    exit 1
+fi
 
 # For Library, we need WRK_PROJECT_PATH first before other steps
 if [ "$IS_LIBRARY" = true ]; then
@@ -344,22 +346,9 @@ else
 
             printf "%s\n" "${YELLOW}Updating version from $CURRENT_VERSION to $NEW_VERSION${NC}"
 
-            # Check permissions first
-            if [ ! -f "$HELM_VALUES_FILE" ] || [ ! -w "$HELM_VALUES_FILE" ]; then
-                echo "Error: File $HELM_VALUES_FILE not found or not writable"
-                exit 1
-            fi
-
-            # Use different sed syntax based on OS
-            if [[ "$OSTYPE" == "darwin"* ]]; then
-                # MacOS
-                sed -i '' "s|tag: .*|tag: ${NEW_VERSION}|g" "$HELM_VALUES_FILE"
-                sed -i '' "s|version: .*|version: \"${NEW_VERSION}\",|g" "$HELM_VALUES_FILE"
-            else
-                # Linux/Windows WSL
-                sed -i "s|tag: .*|tag: ${NEW_VERSION}|g" "$HELM_VALUES_FILE"
-                sed -i "s|version: .*|version: \"${NEW_VERSION}\",|g" "$HELM_VALUES_FILE"
-            fi
+            # Update both tag and version in the file
+            sed -i '' "s|tag: .*|tag: ${NEW_VERSION}|g" "$HELM_VALUES_FILE"
+            sed -i '' "s|version: .*|version: \"${NEW_VERSION}\",|g" "$HELM_VALUES_FILE"
 
             print_success "Updated versions in $HELM_VALUES_FILE"
             print_separator
