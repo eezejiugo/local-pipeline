@@ -9,6 +9,20 @@ BLUE=$(tput setaf 4)
 CYAN=$(tput setaf 6)
 NC=$(tput sgr0)  # No Color
 
+# Parse command line arguments -D for direct deployment
+DIRECT_DEPLOY=false
+while getopts "D" opt; do
+    case $opt in
+        D)
+            DIRECT_DEPLOY=true
+            ;;
+        \?)
+            print_error "Invalid option: -$OPTARG"
+            exit 1
+            ;;
+    esac
+done
+
 # Functions
 print_separator() {
     printf "\n%s\n\n" "${BLUE}${BOLD}----------------------------------------------------------------------------------${NC}"
@@ -30,15 +44,76 @@ print_title() {
     printf "%s\n" "${CYAN}${BOLD}$1${NC}"
 }
 
+check_prerequisites() {
+    local prerequisites=("kubectl" "helm" "docker" "mvn" "gcloud")
+    local missing_tools=()
+
+    for tool in "${prerequisites[@]}"; do
+        if ! command -v "$tool" &> /dev/null; then
+            missing_tools+=("$tool")
+        fi
+    done
+
+    if [ ${#missing_tools[@]} -ne 0 ]; then
+        print_error "Missing required tools: ${missing_tools[*]}"
+        print_error "Please install these tools before running the script."
+        exit 1
+    fi
+}
+
+switch_kubectl_context() {
+    local env=$1
+    local context="gke_${env}-240711_europe-west3_main-cluster"
+    
+    # Check current context
+    local current_context=$(kubectl config current-context 2>/dev/null)
+    
+    if [ "$current_context" != "$context" ]; then
+        print_title "Switching kubectl context to $context"
+        if ! kubectl config use-context "$context"; then
+            print_error "Failed to switch kubectl context"
+            exit 1
+        fi
+    fi
+    
+    print_success "Using correct kubectl context: $context"
+}
+
+upgrade_helm() {
+    local namespace=$1
+    local project_dir=$2
+    local environment=$3
+    local release_name=$4
+    local path_to_helm_project=$5
+
+    sleep 1
+    if ! helm upgrade --install \
+        --namespace "$namespace" \
+        -f "$project_dir/deployment/helm-values-$environment.yaml" \
+        "$release_name" \
+        "$path_to_helm_project" \
+        --atomic \
+        --cleanup-on-fail \
+        --timeout 300s; then
+        print_error "Helm upgrade failed"
+        exit 1
+    fi
+}
+
+# Check prerequisites before starting
+check_prerequisites
+# verify_git_repository
+
 # Step 1: Service Type Selection
-print_step "1" "Service Type Selection"
+print_step "[1]" "Service Type Selection"
 print_title "Select service type:"
 printf "%s\n" "${GREEN}- [1] Maven Library${NC}"
 printf "%s\n" "${YELLOW}- [2] Egress${NC}"
-printf "%s\n" "${RED}- [3] Other Java Services${NC}"
+printf "%s\n" "${BLUE}- [3] Connectors${NC}"
+printf "%s\n" "${RED}- [4] Other Java Services${NC}"
 
 while true; do
-    read -p "Enter option [1-3]: " choice
+    read -p "Enter option [1-4]: " choice
     case $choice in
         1 ) 
             SERVICE_TYPE="maven-repository"
@@ -51,6 +126,11 @@ while true; do
             IS_LIBRARY=false
             break;;
         3 ) 
+            SERVICE_TYPE="connector-application"
+            print_success "Connector service selected"
+            IS_LIBRARY=false
+            break;;
+        4 ) 
             SERVICE_TYPE="neonomics-application"
             print_success "Other services selected"
             IS_LIBRARY=false
@@ -60,7 +140,9 @@ while true; do
     esac
 done
 
-PATH_TO_HELM_PROJECT="/Users/eezejiugo/Documents/NeonomicsCode/helm-repository/stable/$SERVICE_TYPE"
+# Environment variables with defaults
+DOCKER_HELM="oci://europe-west3-docker.pkg.dev/integration-240711/helm-repository"
+PATH_TO_HELM_PROJECT="$DOCKER_HELM/$SERVICE_TYPE"
 print_separator
 
 # For Library, we need WRK_PROJECT_PATH first before other steps
@@ -70,28 +152,14 @@ if [ "$IS_LIBRARY" = true ]; then
     read WRK_PROJECT_PATH
     print_separator
 
-    # Extra step confirm if kubectl context is development
-    print_title "Confirm you have switched your kubectl context to 'development'"
-    printf "[x] Run command 'kubectl config current-context' to confirm\n"
-    printf "[x] Run command 'kubectl config use-context gke_development-240711_europe-west3_main-cluster' to switch\n"
-    while true; do
-        read -p "Confirm switch? [Y/N]: " confirm
-        case $confirm in
-            [Yy]* )
-                print_success "kubectl context switched to 'development'"
-                break;;
-            [Nn]* )
-                print_error "Cancel deployment. Please switch kubectl context and try again"
-                exit 1;;
-            * )
-                print_error "Invalid input. Please enter Y or N";;
-        esac
-    done
+    # Extra step : switch kubectl context to development
+    print_title "Switched your kubectl context to 'development'"
+    switch_kubectl_context "development"
     print_separator
 
 
     # Step 2: Maven Build for Library
-    print_step "2" "Building Maven Package"
+    print_step "[2]" "Building Maven Package"
     printf "%s\n" "${YELLOW}CD into project directory...${NC}"
 
     if cd "$WRK_PROJECT_PATH"; then
@@ -129,7 +197,7 @@ if [ "$IS_LIBRARY" = true ]; then
 
         # Setting version in POM
         printf "%s\n" "${YELLOW}Setting version in pom.xml...${NC}"
-        sleep 2
+        sleep 1
         
         release_version="${CURRENT_BRANCH}-SNAPSHOT"
         if mvn versions:set -DnewVersion="$release_version" -DprocessAllModules -DgenerateBackupPoms=false -q; then
@@ -178,7 +246,7 @@ if [ "$IS_LIBRARY" = true ]; then
 else
     # Continue with regular deployment steps
     # Step 2: Project Configuration
-    print_step "2" "Project Configuration"
+    print_step "[2]" "Project Configuration"
 
     print_title "Select deployment environment:"
     printf "%s\n" "${GREEN}- [1] Staging${NC}"
@@ -201,24 +269,9 @@ else
     done
     print_separator
 
-    # Extra step confirm if kubectl context is development
-    print_title "Confirm you are authenticated & have switched your kubectl context to $DEPLOYMENT_ENVIRONMENT"
-    printf "[x] Run command 'gcloud auth login' to authenticate\n"
-    printf "[x] Run command 'kubectl config current-context' to confirm\n"
-    printf "[x] Run command 'kubectl config use-context gke_${DEPLOYMENT_ENVIRONMENT}-240711_europe-west3_main-cluster' to switch\n"
-    while true; do
-        read -p "Confirm switch? [Y/N]: " confirm
-        case $confirm in
-            [Yy]* )
-                print_success "Authenticated & kubectl context switched to '$DEPLOYMENT_ENVIRONMENT'"
-                break;;
-            [Nn]* )
-                print_error "Cancel deployment. Please switch kubectl context and try again"
-                exit 1;;
-            * )
-                print_error "Invalid input. Please enter Y or N";;
-        esac
-    done
+    # Extra step : switch kubectl context to development
+    print_title "Switching your kubectl context to '$DEPLOYMENT_ENVIRONMENT'"
+    switch_kubectl_context "$DEPLOYMENT_ENVIRONMENT"
     print_separator
 
     print_title "Enter the path to your project:"
@@ -230,7 +283,7 @@ else
     print_separator
 
     # Step 3: Maven Build
-    print_step "3" "Building Maven Package"
+    print_step "[3]" "Prep Project for Deployment"
     printf "%s\n" "${YELLOW}CD into project directory...${NC}"
 
     if cd "$WRK_PROJECT_PATH"; then
@@ -275,62 +328,63 @@ else
             exit 1
         fi
 
-        # Set new version from branch
-        BUILD_TIMESTAMP=$(date +%Y%m%d%H%M%S)
-        NEW_VERSION="${CURRENT_BRANCH}-${BUILD_TIMESTAMP}-SNAPSHOT"
+        # Check if we are going for direct deployment OR continuing with the regular deployment steps
+        if [ "$DIRECT_DEPLOY" = true ]; then
 
-        printf "%s\n" "${YELLOW}Updating version from $CURRENT_VERSION to $NEW_VERSION${NC}"
+            # Step 4: Helm Deployment
+            print_step "[4]" "Upgrading Helm Release"
+            upgrade_helm "$NAMESPACE" "$WRK_PROJECT_PATH" "$DEPLOYMENT_ENVIRONMENT" "$DEPLOYMENT_RELEASE_NAME" "$PATH_TO_HELM_PROJECT"
 
-        # Update both tag and version in the file
-        sed -i '' "s|tag: .*|tag: ${NEW_VERSION}|g" "$HELM_VALUES_FILE"
-        sed -i '' "s|version: .*|version: \"${NEW_VERSION}\",|g" "$HELM_VALUES_FILE"
-
-        print_success "Updated versions in $HELM_VALUES_FILE"
-        print_separator
-
-        # Running Maven package
-        printf "%s\n" "${YELLOW}Building Maven package...${NC}"
-        sleep 1
-        if mvn -Dmaven.test.skip=true clean package -U; then
-            print_separator
         else
-            print_error "Maven build failed"
-            exit 1
-        fi
 
-        # Step 4: Docker Build
-        print_step "4" "Building Docker Image"
-        sleep 1
-        DOCKER_IMAGE="europe-west3-docker.pkg.dev/development-240711/docker-repository/$APP_NAME:${NEW_VERSION}"
-        if ! docker build -t "$DOCKER_IMAGE" .; then
-            print_error "Docker build failed"
-            exit 1
-        fi
-        print_separator
+            # Set new version from branch
+            # BUILD_TIMESTAMP=$(date +%Y%m%d%H%M%S)
+            BUILD_TIMESTAMP=$(date +%H%M%S)
+            NEW_VERSION="${CURRENT_BRANCH}-${BUILD_TIMESTAMP}-SNAPSHOT"
 
-        # Step 5: Docker Push
-        print_step "5" "Pushing Docker Image"
-        sleep 1
-        if ! docker push "$DOCKER_IMAGE"; then
-            print_error "Docker push failed"
-            exit 1
-        fi
-        print_success "$APP_NAME:${NEW_VERSION} pushed to Docker registry"
-        print_separator
+            printf "%s\n" "${YELLOW}Updating version from $CURRENT_VERSION to $NEW_VERSION${NC}"
 
-        # Step 6: Helm Deployment
-        print_step "6" "Upgrading Helm Release"
-        sleep 2
-        if ! helm upgrade --install \
-            --namespace "$NAMESPACE" \
-            -f "$WRK_PROJECT_PATH/deployment/helm-values-$DEPLOYMENT_ENVIRONMENT.yaml" \
-            "$DEPLOYMENT_RELEASE_NAME" \
-            "$PATH_TO_HELM_PROJECT" \
-            --atomic \
-            --cleanup-on-fail \
-            --timeout 300s; then
-            print_error "Helm upgrade failed"
-            exit 1
+            # Update both tag and version in the file
+            sed -i '' "s|tag: .*|tag: ${NEW_VERSION}|g" "$HELM_VALUES_FILE"
+            sed -i '' "s|version: .*|version: \"${NEW_VERSION}\",|g" "$HELM_VALUES_FILE"
+
+            print_success "Updated versions in $HELM_VALUES_FILE"
+            print_separator
+
+            # Running Maven package
+            printf "%s\n" "${YELLOW}Building Maven package...${NC}"
+            sleep 1
+            if mvn -Dmaven.test.skip=true clean package -U; then
+                print_separator
+            else
+                print_error "Maven build failed"
+                exit 1
+            fi
+
+            # Step 4: Docker Build
+            print_step "[4]" "Building Docker Image"
+            sleep 1
+            DOCKER_IMAGE="europe-west3-docker.pkg.dev/development-240711/docker-repository/$APP_NAME:${NEW_VERSION}"
+            if ! docker build -t "$DOCKER_IMAGE" .; then
+                print_error "Docker build failed"
+                exit 1
+            fi
+            print_separator
+
+            # Step 5: Docker Push
+            print_step "[5]" "Pushing Docker Image"
+            sleep 1
+            if ! docker push "$DOCKER_IMAGE"; then
+                print_error "Docker push failed"
+                exit 1
+            fi
+            print_success "$APP_NAME:${NEW_VERSION} pushed to Docker registry"
+            print_separator
+
+            # Step 6: Helm Deployment
+            print_step "[6]" "Upgrading Helm Release"
+            upgrade_helm "$NAMESPACE" "$WRK_PROJECT_PATH" "$DEPLOYMENT_ENVIRONMENT" "$DEPLOYMENT_RELEASE_NAME" "$PATH_TO_HELM_PROJECT"
+
         fi
         print_separator
 
@@ -338,8 +392,14 @@ else
         print_error "Failed to change directory"
         exit 1
     fi
-
-    print_success "Process completed & deployed to env=$DEPLOYMENT_ENVIRONMENT"
-    printf "%s\n" "${YELLOW}${BOLD}Confirm deployment using OpenLens${NC}"
+    
+    # List changes
+    print_success "PROCESS COMPLETE:"
+    print_success "Namespace: $NAMESPACE"
+    print_success "Release Name: $DEPLOYMENT_RELEASE_NAME"
+    print_success "App Name: $APP_NAME"
+    print_success "Version: $NEW_VERSION"
+    print_success "Environment: $DEPLOYMENT_ENVIRONMENT"
+    printf "\n%s\n\n" "${YELLOW}${BOLD}Confirm deployment using OpenLens${NC}"
     print_separator
 fi

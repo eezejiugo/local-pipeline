@@ -6,12 +6,6 @@ This is a one time setup, but first before you kick off your setup, it is recomm
 
 Here is the document: [Deploying to lower environment](https://neonomics.atlassian.net/wiki/spaces/NPO/pages/4636180496/Suggestions+on+how+to+deploy+to+lower+environments)
 
-1. Clone the [Helm repository project](https://github.com/fintechinnovationas/helm-repository.git) from Github and store in your desired path.
-2. Navigate to the folder `/helm-repository/stable/` in the clone helm project and get the path.
-3. Run the command `pwd` to get the path to the working directory.
-4. Replace the path `/Path/to/helm-repository/stable/` in the script with the path to your helm repository project from No.3 above.
-
-
 ### Deploying with local pipeline script
 As mentioned above, the script helps us simplify the deployment process. Before running the script, ensure you have ran the commands:
 
@@ -19,7 +13,7 @@ As mentioned above, the script helps us simplify the deployment process. Before 
 
 [x] gcloud auth application-default login
 
-To ensure everything works smoothly while using the script, we need to add some configurations in our `helm-values-development.yaml` and `helm-values-development.yaml` file.
+To ensure everything works smoothly while using the script, we need to add some configurations in our `helm-values-staging.yaml` or `helm-values-development.yaml` file (depending on the environment you are deploying to).
 
 Example:
 ```yaml
@@ -56,8 +50,7 @@ Note that extra parameters `namespace` and `release-name` were added under the *
 - namespace: is the kubectl namespace
 - release-name: is the kubectl pod release-name
 
-To run the script: `sh ./local-deployment.sh`
+To run the script: `sh ./local-deployment.sh` for MacOS or `bash ./local-deployment.sh` for Windows
 
 ### NB:
-This script can only be used to push maven library to the Google Artifact Registry, and for the deployment of Egress, UAPI and Consent Manager. Support for connectors will be added in the future.
-You are free to raise suggestions or fork the project and add improvements where you seem fit.
+This script can only be used to push maven library to the Google Artifact Registry, and for the deployment of Egress, Connectors, UAPI and Consent Manager.
