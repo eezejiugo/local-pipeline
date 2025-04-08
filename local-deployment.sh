@@ -159,7 +159,7 @@ build_and_push_docker_image() {
     print_step "[4]" "Building Docker Image"
     DOCKER_IMAGE="europe-west3-docker.pkg.dev/development-240711/docker-repository/$app_name:${new_version}"
     sleep 1
-    if ! docker build -t "$DOCKER_IMAGE" .; then
+    if ! docker build --platform linux/amd64 -t "$DOCKER_IMAGE" .; then
         print_error "Docker build failed"
         exit 1
     fi
@@ -407,27 +407,31 @@ else
         # Using SED to update helm-values-$DEPLOYMENT_ENVIRONMENT.yaml
         printf "%s\n" "${YELLOW}Using SED to update helm-values-$DEPLOYMENT_ENVIRONMENT.yaml...${NC}"
 
-        # Read pod namespace
-        NAMESPACE=$(grep 'namespace:' "$HELM_VALUES_FILE" | head -n 1 | awk -F'"' '{print $2}')
-        if [[ -z "$NAMESPACE" ]]; then
-            print_error "Could not find the pod namespace in $HELM_VALUES_FILE"
-            exit 1
-        fi
-
-        # Read pod release name
-        # This info is found in the Pod > Deployment release name from OpenLens
-        DEPLOYMENT_RELEASE_NAME=$(grep 'release-name:' "$HELM_VALUES_FILE" | head -n 1 | awk -F'"' '{print $2}')
-        if [[ -z "$DEPLOYMENT_RELEASE_NAME" ]]; then
-            print_error "Could not find the pod release-name in $HELM_VALUES_FILE"
-            exit 1
-        fi
-
         # Read app name
         APP_NAME=$(grep 'appName:' "$HELM_VALUES_FILE" | head -n 1 | awk -F'"' '{print $2}')
         if [[ -z "$APP_NAME" ]]; then
             print_error "Could not find the appName in $HELM_VALUES_FILE"
             exit 1
         fi
+
+        # Read pod namespace
+        NAMESPACE=$(grep 'namespace:' "$HELM_VALUES_FILE" | head -n 1 | awk -F'"' '{print $2}')
+        if [[ -z "$NAMESPACE" ]]; then
+            print_error "Could not find the pod namespace in $HELM_VALUES_FILE" 
+            print_error "Add 'namespace: <namespace>' to the podAnnotations section"
+            exit 1
+        fi
+
+        # Set the pod release name from the app name
+        DEPLOYMENT_RELEASE_NAME=$APP_NAME
+
+        # Read pod release name
+        # This info is found in the Pod > Deployment release name from OpenLens
+        # DEPLOYMENT_RELEASE_NAME=$(grep 'release-name:' "$HELM_VALUES_FILE" | head -n 1 | awk -F'"' '{print $2}')
+        # if [[ -z "$DEPLOYMENT_RELEASE_NAME" ]]; then
+        #     print_error "Could not find the pod release-name in $HELM_VALUES_FILE"
+        #     exit 1
+        # fi
 
         # Extract the current version from the Helm values file
         CURRENT_VERSION=$(awk -F'[:, ]+' '/tag:/ {print $3}' "$HELM_VALUES_FILE")
