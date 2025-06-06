@@ -44,13 +44,17 @@ podAnnotations: {
 }
 ```
 
-Note that extra parameters `namespace` and `release-name` were added under the *podAnnotations*. Also, when running the script, you will noticed that `image.tag` and the `podExtraLabels.version` will be overwritten and replace by your branch name + timestamp + SNAPSHOT. The timestamp helps with redeploying your app after a change is done.
+Note that extra parameters `namespace` was added under the *podAnnotations*. Also, when running the script, you will noticed that `image.tag` and the `podExtraLabels.version` will be overwritten and replace by your branch name + timestamp + SNAPSHOT. The timestamp helps with redeploying your app after a change is done.
 
-- namespace: is the kubectl namespace
+- `namespace`: is the kubectl namespace
 
-To run the script, CD into the folder where the script is saved and run the command: `bash local-deployment.sh`
+To run the script, CD into the folder where the script is saved and run the command: 
 
-Let's say you deployed your branch and someone overrides it, and you want to redeploy without building the image again, use this command: `bash local-deployment.sh -D`
+`bash local-deployment.sh`
+
+Let's say you deployed your branch and someone overrides it, and you want to redeploy without building the image again, use this command: 
+
+`bash local-deployment.sh -D`
 
 ### NB:
 This script can only be used to push maven library to the Google Artifact Registry, and for the deployment of Egress, Connectors, Connector-Application, Polling Service, UAPI and Consent Manager.
