@@ -44,6 +44,20 @@ print_title() {
     printf "%s\n" "${CYAN}${BOLD}$1${NC}"
 }
 
+gcloud_auth() {
+    print_step "[0]" "Checking GCP Authentication"
+
+    if gcloud auth print-access-token | helm registry login -u oauth2accesstoken \
+        --password-stdin europe-west3-docker.pkg.dev; then
+        print_success "GCP authentication successful"
+        print_separator
+        return 0
+    else
+        print_error "GCP authentication failed"
+        return 1
+    fi
+}
+
 check_prerequisites() {
     local prerequisites=("kubectl" "helm" "docker" "mvn" "gcloud")
     local missing_tools=()
@@ -176,8 +190,15 @@ build_and_push_docker_image() {
     print_separator
 }
 
+#================================================================================
+# Main Script Execution
+#================================================================================
+
 # Check prerequisites before starting
 check_prerequisites
+
+# Authenticate with GCP
+gcloud_auth
 
 # Step 1: Service Type Selection
 print_step "[1]" "Service Type Selection"

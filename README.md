@@ -20,7 +20,7 @@ Example:
 image:
   repository: europe-west3-docker.pkg.dev/development-xxx11/docker-repository
   name: uapi
-  tag: release-bulk-payment-SNAPSHOT
+  tag: branch-name-SNAPSHOT #This will be updated by the script
   pullPolicy: Always
   pullSecrets: gar-docker-credentials
 
@@ -29,7 +29,7 @@ label:
 
 podExtraLabels: {
   appName: "uapi",
-  version: "release-bulk-payment-SNAPSHOT",
+  version: "branch-name-SNAPSHOT", #This will be updated by the script
   stage: "stable",
   tier: "backend",
   owner: "neonomics",
@@ -40,17 +40,15 @@ podAnnotations: {
   deployment-date: "",
   build-id: "",
   commit-hash: "",
-  namespace: "uapi",
-  release-name: "uapi-v1"
+  namespace: "uapi"
 }
 ```
 
 Note that extra parameters `namespace` and `release-name` were added under the *podAnnotations*. Also, when running the script, you will noticed that `image.tag` and the `podExtraLabels.version` will be overwritten and replace by your branch name + timestamp + SNAPSHOT. The timestamp helps with redeploying your app after a change is done.
 
 - namespace: is the kubectl namespace
-- release-name: is the kubectl pod release-name
 
-To run the script: `sh ./local-deployment.sh` for MacOS or `bash ./local-deployment.sh` for Windows
+To run the script, CD into the folder where the script is saved and run the command: `bash local-deployment.sh`
 
 ### NB:
-This script can only be used to push maven library to the Google Artifact Registry, and for the deployment of Egress, Connectors, UAPI and Consent Manager.
+This script can only be used to push maven library to the Google Artifact Registry, and for the deployment of Egress, Connectors, Connector-Application, Polling Service, UAPI and Consent Manager.
