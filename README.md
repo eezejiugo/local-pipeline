@@ -50,5 +50,7 @@ Note that extra parameters `namespace` and `release-name` were added under the *
 
 To run the script, CD into the folder where the script is saved and run the command: `bash local-deployment.sh`
 
+Let's say you deployed your branch and someone overrides it, and you want to redeploy without building the image again, use this command: `bash local-deployment.sh -D`
+
 ### NB:
 This script can only be used to push maven library to the Google Artifact Registry, and for the deployment of Egress, Connectors, Connector-Application, Polling Service, UAPI and Consent Manager.
